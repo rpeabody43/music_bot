@@ -135,7 +135,7 @@ class MusicBot:
         client.set_msg_channel(ctx.message.channel)
         
         # Add the song to the queue
-        song: QueuedSong | None = client.enqueue(ctx.arg)
+        song: QueuedSong | None = await client.enqueue(ctx.arg)
         if song:
             await self._on_queue(song, client)
             if not client.is_active():

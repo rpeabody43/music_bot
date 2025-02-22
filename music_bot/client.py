@@ -136,7 +136,7 @@ class MusicBotClient(discord.VoiceClient):
             self.queue.pop(0)
             self.next_in_queue-=1
             
-        if hasattr(self, '_on_queue'): self._run_task(self._on_queue(song, self))
+        if hasattr(self, '_on_queue') and type(song)==QueuedSong: self._run_task(self._on_queue(song, self))
             
         return None if type(song)==Exception else song
           
