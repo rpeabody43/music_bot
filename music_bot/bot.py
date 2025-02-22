@@ -210,7 +210,7 @@ class MusicBot:
         await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = song.name, url=song.url).set_thumbnail(url=song.thumbnail))
         
     async def _default_on_queue(self, song: QueuedSong, client: MusicBotClient):
-        if not client.is_active():
+        if client.is_active():
             await client.msg_channel.send(embed=discord.Embed(title = "Queued", description = song.name, url=song.url).set_thumbnail(url=song.thumbnail))
     
     async def _on_dc(self, client: MusicBotClient):
