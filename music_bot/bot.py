@@ -207,11 +207,11 @@ class MusicBot:
     
     # Callbacks
     async def _default_on_play(self, song: QueuedSong, client: MusicBotClient):
-        await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = song.name, url=song.url).set_thumbnail(url=song.thumbnail))
+        await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = f"{song.name} [{song.duration}]", url=song.url).set_thumbnail(url=song.thumbnail))
         
     async def _default_on_queue(self, song: QueuedSong, client: MusicBotClient):
         if client.is_active():
-            await client.msg_channel.send(embed=discord.Embed(title = "Queued", description = song.name, url=song.url).set_thumbnail(url=song.thumbnail))
+            await client.msg_channel.send(embed=discord.Embed(title = "Queued", description = f"{song.name} [{song.duration}]", url=song.url).set_thumbnail(url=song.thumbnail))
     
     async def _on_dc(self, client: MusicBotClient):
         # This must run when the bot disconnects

@@ -9,6 +9,7 @@ Created on Sun Sep 19 17:22:34 2021
 @author: irawi
 """ 
 import discord
+from datetime import datetime
 import os
 
 from cmd_manager import setup_runner, CmdRunner, CmdContext, CmdResult
@@ -22,13 +23,29 @@ bot: CmdRunner = setup_runner(client, on_success = lambda ctx: ctx.message.add_r
 
 music_bot: MusicBot = MusicBot(bot)
 
+def before_any(string: str, delims: list[str], start: int = 0) -> str:
+    """
+    Get the start of a string up until any delimiter is found
+    """
+    for i in range(start, len(string)):
+        if string[i] in delims:
+            return string[:i]
+    return string
+    
+
 async def on_play(song: QueuedSong, music_client: MusicBotClient):
     await music_bot._default_on_play(song, music_client)
+    
     if type(music_client.msg_channel)==discord.TextChannel and music_client.guild.id==462469935436922880:
-        await client.change_presence(activity=discord.Game(song.name, small_image = song.thumbnail), status=discord.Status.online)
+        await client.change_presence(
+            activity=discord.Game(before_any(song.name, [':', '-', '|', '.', '(', '/', '\\'], 4), 
+                                  assets = {'small_image': song.thumbnail}, 
+                                  start=datetime.now()), 
+            status=discord.Status.online)
     
 async def on_disconnect(music_client: MusicBotClient):
     await music_bot._default_on_dc(music_client)
+    
     if music_client.guild.id==462469935436922880:
         await client.change_presence(status=discord.Status.idle)
 
