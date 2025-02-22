@@ -38,9 +38,12 @@ async def on_play(song: QueuedSong, music_client: MusicBotClient):
     
     if type(music_client.msg_channel)==discord.TextChannel and music_client.guild.id==462469935436922880:
         await client.change_presence(
-            activity=discord.Game(before_any(song.name, [':', '-', '|', '.', '(', '/', '\\'], 4), 
-                                  assets = {'small_image': song.thumbnail}, 
-                                  start=datetime.now()), 
+            activity=discord.Game(before_any(song.name, [':', '-', '|', '.', '(', '/', '\\', ';'], 4), 
+                                  assets = {'small_image': song.thumbnail,
+                                            'small_text': song.name,
+                                            'large_image': song.thumbnail,
+                                            'large_text': song.name}, 
+                                  start=datetime.now()),
             status=discord.Status.online)
     
 async def on_disconnect(music_client: MusicBotClient):
