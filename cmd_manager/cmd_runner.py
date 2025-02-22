@@ -91,7 +91,7 @@ class CmdRunner:
         """
         if message.author == self.client.user or message.author.bot:
             return None
-        if not message.guild:
+        if not message.guild or len(message.content)==0:
             return None
         if message.content==None or message.content[0]!=self.server_data[message.guild].prefix:
             return None
