@@ -1,6 +1,7 @@
 from typing import Any, Callable, Awaitable
 from .server_data import ServerData
 from discord import Message, Client, Guild
+import traceback
 
 type CmdResult = CmdResult
 
@@ -26,7 +27,7 @@ class CmdResult:
         return self.__val if self.success else Exception("Attempted to unwrap an Err Result")
     
     def err_msg(self) -> str | None:
-        return None if self.success else f"{self.__val}" + (f" on line {self.__val.__traceback__.tb_lineno}\n{self.__val.__traceback__.tb_frame}" if type(self.__val)==Exception or isinstance(self.__val, BaseException) else "")
+        return None if self.success else ''.join(traceback.extract_tb(self.__val).format()) if isinstance(self.__val, BaseException) else self.__val
     
     def __str__(self) -> str:
         return f"CmdResult::{"Ok" if self.success else "Err"}({str(self.__val)})"

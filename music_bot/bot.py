@@ -140,9 +140,11 @@ class MusicBot:
             await self._on_queue(song, client)
             if not client.is_active():
                 client.play_next()
-        
-        return CmdResult.ok(None)
-        
+            return CmdResult.ok(None)
+        else:         
+            return CmdResult.err("Could not queue song")
+
+            
     async def skip(self, ctx: CmdContext) -> CmdResult:
         """Skips to the next song in the queue
 

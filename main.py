@@ -9,7 +9,6 @@ Created on Sun Sep 19 17:22:34 2021
 @author: irawi
 """ 
 import discord
-from datetime import datetime
 import os
 
 from cmd_manager import setup_runner, CmdRunner, CmdContext, CmdResult
@@ -23,28 +22,24 @@ bot: CmdRunner = setup_runner(client, on_success = lambda ctx: ctx.message.add_r
 
 music_bot: MusicBot = MusicBot(bot)
 
-def before_any(string: str, delims: list[str], start: int = 0) -> str:
+def split_any(string: str, delims: list[str], start: int = 0) -> tuple[str, str]:
     """
-    Get the start of a string up until any delimiter is found
+    Split a string once any of the characters in delims is matched
     """
     for i in range(start, len(string)):
         if string[i] in delims:
-            return string[:i]
-    return string
+            return string[:i], string[i:]
+    return (string)
     
 
 async def on_play(song: QueuedSong, music_client: MusicBotClient):
     await music_bot._default_on_play(song, music_client)
     
     if type(music_client.msg_channel)==discord.TextChannel and music_client.guild.id==462469935436922880:
+        song_details = split_any(song.name, [':', '-', '|', '.', '(', '/', '\\', ';'], 4)
         await client.change_presence(
-            activity=discord.Game(before_any(song.name, [':', '-', '|', '.', '(', '/', '\\', ';'], 4), 
-                                  assets = {'small_image': song.thumbnail,
-                                            'small_text': song.name,
-                                            'large_image': song.thumbnail,
-                                            'large_text': song.name}, 
-                                  start=datetime.now()),
-            status=discord.Status.online)
+            activity = discord.Game(song_details[0], details = song_details[1]),
+            status = discord.Status.online)
     
 async def on_disconnect(music_client: MusicBotClient):
     await music_bot._default_on_dc(music_client)
@@ -75,7 +70,7 @@ async def on_message(message: discord.Message):
     
     # Check the result and send an error message if the command failed
     if cmd_result:
-        if cmd_result.is_err():
+        if cmd_result.is_err() and len(cmd_result.err_msg()) > 0:
             await message.channel.send(cmd_result.err_msg())
         return
     

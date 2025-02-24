@@ -200,9 +200,13 @@ class MusicBotClient(discord.VoiceClient):
         """
         if self._active:
             self.source.cleanup()
+        elif self._timeout_task:
+            self._timeout_task.cancel()
             
-        if hasattr(self, '_on_disconnect'): self._run_task(self._on_disconnect(self))
         await super().disconnect(force = force)
+        if hasattr(self, '_on_disconnect') and not self.is_connected(): 
+            self._run_task(self._on_disconnect(self))
+
         
     def get_queue(self) -> tuple[int, list[QueuedSong]]:
         """Get the queue and the current song index
@@ -253,7 +257,7 @@ class MusicBotClient(discord.VoiceClient):
         self._on_err: Callable[[MusicBotClient, Exception], Awaitable[None]] = func
     
     def set_on_disconnect(self, func: Callable[[MusicBotClient], Awaitable[None]]) -> None:
-        """Set a function which gets called right before the bot disconnects from voice
+        """Set a function which gets called right after the bot disconnects from voice
         
         Note that it is possible that the bot fails to disconnect, but the disconnect function will get called anyways. 
 
