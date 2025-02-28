@@ -135,14 +135,14 @@ class MusicBot:
         client.set_msg_channel(ctx.message.channel)
         
         # Add the song to the queue
-        song: QueuedSong | None = await client.enqueue(ctx.arg)
-        if song:
+        song: QueuedSong | Exception | None = await client.enqueue(ctx.arg)
+        if song and type(song)==QueuedSong:
             await self._on_queue(song, client)
             if not client.is_active():
                 client.play_next()
             return CmdResult.ok(None)
         else:         
-            return CmdResult.err("Could not queue song")
+            return CmdResult.err("Could not queue song"+f"\n{song}" if song else "")
 
             
     async def skip(self, ctx: CmdContext) -> CmdResult:

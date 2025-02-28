@@ -106,6 +106,7 @@ class MusicBotClient(discord.VoiceClient):
         self._active: bool = False
         self._timeout_task: asyncio.Task | None = None
         self._bg_tasks: set[asyncio.Task] = set()
+        self._queue_song_task: asyncio.Task[QueuedSong | Exception | None] | None = None
         
         # Acts as a callback for errors
         async def default_err(c: MusicBotClient, e: Exception):
@@ -115,7 +116,7 @@ class MusicBotClient(discord.VoiceClient):
         super().__init__(client, channel)
         self.msg_channel: discord.abc.Messageable = self.channel
     
-    async def enqueue(self, query: str | QueuedSong) -> QueuedSong | None:
+    async def enqueue(self, query: str | QueuedSong) -> QueuedSong | Exception | None:
         """Adds a song to the queue
 
         Args:
@@ -124,21 +125,28 @@ class MusicBotClient(discord.VoiceClient):
         Returns:
             QueuedSong | None: Song that was enqueued, or None if the query failed to be found.
         """
-        song: QueuedSong | Exception | None = await QueuedSong.create(query) if type(query)==str else query
-        
-        # If song could not be found, run the error function
-        if song == None or type(song) == Exception: self._run_task(self._on_err(self, song if song else Exception(f"Could not queue song {query}")))
-        # Otherwise, add the song
-        else: self.queue.append(song)
+        # Wait for previous query to run if it exists
+        if self._queue_song_task and not self._queue_song_task.done(): await self._queue_song_task
+
+        # Search using the query and queue the song
+        song: QueuedSong | Exception | None
+        if type(query)==str:
+            self._queue_song_task = self.loop.create_task(QueuedSong.create(query))
+            song = await self._queue_song_task
+        else:
+            song = query
+
+        # Add the song if it was found
+        if song and type(song)==QueuedSong: self.queue.append(song)
         
         # Limit queue size to 32
         if len(self.queue) > 32: 
             self.queue.pop(0)
             self.next_in_queue-=1
-            
+        
         if hasattr(self, '_on_queue') and type(song)==QueuedSong: self._run_task(self._on_queue(song, self))
             
-        return None if type(song)==Exception else song
+        return song
           
     def peek_queue(self) -> QueuedSong | None:
         return self.queue[self.next_in_queue] if self.next_in_queue < len(self.queue) else None
@@ -186,13 +194,14 @@ class MusicBotClient(discord.VoiceClient):
     
     def _set_inactive(self):
         self._active = False
+        if self._timeout_task and not self._timeout_task.done(): self._timeout_task.cancel()
         self._timeout_task = self.loop.create_task(self.timeout())
     
     async def timeout(self):
         await asyncio.sleep(300)
-        await self.disconnect()
+        await self.disconnect(False, False)
         
-    async def disconnect(self, force: bool = False):
+    async def disconnect(self, force: bool = False, cancel_timeout: bool = True):
         """Disconnects the bot from its voice channel
 
         Args:
@@ -200,7 +209,7 @@ class MusicBotClient(discord.VoiceClient):
         """
         if self._active:
             self.source.cleanup()
-        elif self._timeout_task:
+        elif cancel_timeout and self._timeout_task:
             self._timeout_task.cancel()
             
         await super().disconnect(force = force)
