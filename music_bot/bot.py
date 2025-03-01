@@ -55,8 +55,8 @@ class MusicBot:
                 
                 # Print errors and send them to the discord channel as well
                 async def log_err(client: MusicBotClient, e: Exception):
-                    await client.msg_channel.send(str(e))
                     print(e, e.__traceback__.tb_frame, e.__traceback__.tb_lineno)
+                    await client.msg_channel.send(str(e))
                     
                 client.set_on_err(log_err)
                 
