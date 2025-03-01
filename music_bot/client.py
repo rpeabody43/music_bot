@@ -1,6 +1,6 @@
 import discord
 import asyncio
-from typing import Callable, Awaitable, Coroutine, Any
+from typing import Callable, Awaitable, Coroutine, SupportsIndex, Any
 import yt_dlp
 
 type QueuedSong = QueuedSong
@@ -108,6 +108,8 @@ class MusicBotClient(discord.VoiceClient):
         self._bg_tasks: set[asyncio.Task] = set()
         self._queue_song_task: asyncio.Task[QueuedSong | Exception | None] | None = None
         
+        self._disconnecting: bool = False
+        
         # Acts as a callback for errors
         async def default_err(c: MusicBotClient, e: Exception):
             print(e)
@@ -158,10 +160,35 @@ class MusicBotClient(discord.VoiceClient):
             QueuedSong | None: _description_
         """
         song: QueuedSong | None = self.peek_queue()
-        self.next_in_queue += 1
+        if song: self.next_in_queue += 1
         if self.loop_queue and self.next_in_queue >= len(self.queue):
             self.next_in_queue = 0
         return song
+    
+    def pop_queue(self, index: SupportsIndex = -1) -> QueuedSong | Exception:
+        """Remove a song from the queue, decrementing 'next_in_queue' as needed. 
+
+        Args:
+            index (SupportsIndex, optional): Index of song in queue to remove. Defaults to -1.
+
+        Returns:
+            QueuedSong | Exception: The song that got removed; if pop() fails then returns an exception
+        """
+        if index < 0 or index >= len(self.queue): return Exception("Index out of bounds")
+        elif type(index) != SupportsIndex: return Exception("Index for removing song must be a number")
+        
+        res: QueuedSong = self.queue.pop(index)
+        # Change next_in_queue only if self.queue.pop does not raise an error
+        if self.next_in_queue > index and self.next_in_queue > 0: self.next_in_queue -= 1
+        return res
+    
+    def curr_song(self) -> tuple[QueuedSong | None, int]:
+        """Returns the current QueuedSong and the song's index in the queue
+
+        Returns:
+            tuple[QueuedSong | None, int]: Currently playing QueuedSong and its index in the queue
+        """
+        return (self.queue[self.next_in_queue-1], self.next_in_queue - 1) if self.next_in_queue > 0 and self.next_in_queue - 1 < len(self.queue) else (None, -1)
     
     def play_next(self, error: Exception | None = None):
         """Plays the next song in the queue, stopping the currently playing song if necessary. 
@@ -169,6 +196,7 @@ class MusicBotClient(discord.VoiceClient):
         Args:
             error (Exception | None, optional): Argument passed by VoiceClient.play. Defaults to None.
         """
+        if self._disconnecting: return
         if error: self._run_task(self._on_err(self, error))
         
         # if we're playing a song already, then stop playing it and return
@@ -207,6 +235,8 @@ class MusicBotClient(discord.VoiceClient):
         Args:
             force (bool, optional): Force the disconnect even if the bot is not connected. Defaults to False.
         """
+        self._disconnecting = True
+        
         if self._active:
             self.source.cleanup()
         elif cancel_timeout and self._timeout_task:
@@ -224,6 +254,14 @@ class MusicBotClient(discord.VoiceClient):
             tuple[int, list[QueuedSong]]: (current song index, full song queue)
         """
         return self.next_in_queue-1, self.queue
+    
+    def toggle_loop(self) -> bool:
+        """Toggles whether the queue should loop back to the beginning
+
+        Returns:
+            bool: what the loop was set to 
+        """
+        self.loop_queue = not self.loop_queue
         
     def is_active(self) -> bool:
         """Indicates if the bot is playing music or if there are songs still left in the queue

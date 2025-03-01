@@ -8,12 +8,14 @@ class MusicBot:
     def __init__(self, bot: CmdRunner, *, 
                  on_play: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] | None = None,
                  on_queue: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] | None = None,
-                 on_dc: Callable[[MusicBotClient], Awaitable[None]] | None = None):
+                 on_dc: Callable[[MusicBotClient], Awaitable[None]] | None = None,
+                 show_queue: Callable[[CmdContext, list[QueuedSong], int], Awaitable[None]] | None = None):
         self.clients: dict[int, MusicBotClient] = {}
         
         self._on_play: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] = on_play if on_play else self._default_on_play
         self._on_queue: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] = on_queue if on_queue else self._default_on_queue
         self._custom_on_dc: Callable[[MusicBotClient], Awaitable[None]] = on_dc if on_dc else self._default_on_dc
+        self._show_queue: Callable[[CmdContext, list[QueuedSong], int], Awaitable[None]] = show_queue if show_queue else self._default_show_queue
         
         self._setup_commands(bot)
     
@@ -164,23 +166,68 @@ class MusicBot:
         
         return CmdResult.ok(None)
     
-    async def queue(self, ctx: CmdContext) -> CmdResult:
+    async def show_queue(self, ctx: CmdContext) -> CmdResult:
         """Prints the music queue of the bot
 
         Args:
-            ctx (CmdContext): _description_
+            ctx (CmdContext): Context given to the show queue command
 
         Returns:
-            CmdResult: _description_
+            CmdResult: Result of running the command
         """
         # Get the bot's voice client instance for this server
         client: MusicBotClient | None = self.clients.get(ctx.guild.id)
 
         if client==None: return CmdResult.err("Bot is not connected to a voice channel!")
         
-        await ctx.message.channel.send("\n".join([q.name for q in client.queue]))
+        # await ctx.message.channel.send("\n".join([f"{i+1}. {q.name}" for i,q in enumerate(client.queue)]))
+        await self._show_queue(ctx, client.queue, client.curr_song()[1])
         
         return CmdResult.ok(None)
+    
+    async def loop(self, ctx: CmdContext) -> CmdResult:
+        """Toggles the loop for the bot
+
+        Args:
+            ctx (CmdContext): Context given to the loop command
+
+        Returns:
+            CmdResult: Result of running the command
+        """
+        # Get the bot's voice client instance for this server
+        client: MusicBotClient | None = self.clients.get(ctx.guild.id)
+
+        if client==None: return CmdResult.err("Bot is not connected to a voice channel!")
+        
+        if client.toggle_loop():
+            await ctx.message.channel.send("Loop enabled")
+        else:
+            await ctx.message.channel.send("Loop disabled")
+        
+        return CmdResult.ok(None)
+    
+    async def remove(self, ctx: CmdContext) -> CmdResult:
+        """Removes a song from the queue
+
+        Args:
+            ctx (CmdContext): Context given to this command
+
+        Returns:
+            CmdResult: Result of running the remove command
+        """
+        if not ctx.arg.isnumeric(): return CmdResult.err("Must provide number of the song in queue to remove!")
+        
+        # Get the bot's voice client instance for this server
+        client: MusicBotClient | None = self.clients.get(ctx.guild.id)
+        
+        if client==None: return CmdResult.err("Bot is not connected to a voice channel!")
+        
+        song: QueuedSong | Exception = client.pop_queue(int(ctx.arg) - 1)
+        if type(song)==QueuedSong:
+            await ctx.message.channel.send(f"Removed `{song.name}` from queue")
+            return CmdResult.ok(None)
+        else:
+            return CmdResult.err("Could not remove song")
             
     def _setup_commands(self, bot: CmdRunner):
         """Setup all music bot related commands using discordbot.Bot, which will assign the given functions
@@ -194,16 +241,26 @@ class MusicBot:
         bot[['play', 'p']] = self.play
         bot[['disconnect', 'leave', 'dc']] = self.disconnect
         bot['skip'] = self.skip
-        bot[['queue', 'q']] = self.queue
+        bot[['queue', 'q']] = self.show_queue
+        bot[['remove', 'rm']] = self.remove
+        bot['loop'] = self.loop
     
     def set_on_play(self, on_play: Callable[[QueuedSong, MusicBotClient], Awaitable[None]]):
         self._on_play: Callable[[QueuedSong, MusicBotClient]] = on_play
         
     def set_on_queue(self, on_queue: Callable[[QueuedSong, MusicBotClient], Awaitable[None]]):
+        """Set a command to run whenever a song is queued
+
+        Args:
+            on_queue (Callable[[QueuedSong, MusicBotClient], Awaitable[None]]): async function that gets run
+        """
         self._on_queue: Callable[[QueuedSong, MusicBotClient]] = on_queue
         
     def set_on_disconnect(self, on_dc: Callable[[discord.Client], Awaitable[None]]):
         self._custom_on_dc: Callable[[discord.Client]] = on_dc
+        
+    def set_show_queue(self, show_queue: Callable[[CmdContext, list[QueuedSong], int], Awaitable[None]]):
+        self._show_queue = show_queue
     
     ##### Private functions #####
     
@@ -226,3 +283,15 @@ class MusicBot:
         
     async def _default_on_dc(self, client: MusicBotClient):
         await client.msg_channel.send(embed=discord.Embed(title="Disconnected"))
+        
+    async def _default_show_queue(self, ctx: CmdContext, queue: list[QueuedSong], curr_idx: int):
+        if len(queue) > 0:
+            for page in range((len(queue)-1)//8+1):
+                start: int = page*8
+                embed: discord.Embed = discord.Embed(
+                    title="Queue" + (f" {page+1}" if len(queue) > 8 else ""),
+                    description='\n'.join([f"{i+1+start}. "+(f"🎶 **{s.name}**" if i+start==curr_idx else s.name) + f" [[{s.duration}]({s.url})]" for i,s in enumerate(queue[start:start+9])]))
+                await ctx.message.channel.send(embed=embed)
+        else:
+            await ctx.message.channel.send("Queue is empty!")
+                

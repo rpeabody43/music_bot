@@ -9,10 +9,12 @@ Created on Sun Sep 19 17:22:34 2021
 @author: irawi
 """ 
 import discord
+import asyncio
 import os
 
 from cmd_manager import setup_runner, CmdRunner, CmdContext, CmdResult
 from music_bot import MusicBot, MusicBotClient, QueuedSong
+import song_logger
 
 
 intents: discord.Intents = discord.Intents.all()
@@ -30,8 +32,8 @@ def split_any(string: str, delims: list[str], start: int = 0) -> tuple[str, str]
         if string[i] in delims:
             return string[:i], string[i:]
     return (string)
-    
 
+# Added functionality for my (friends) server's music bot to show currently playing song as the bot's status
 async def on_play(song: QueuedSong, music_client: MusicBotClient):
     await music_bot._default_on_play(song, music_client)
     
@@ -40,7 +42,9 @@ async def on_play(song: QueuedSong, music_client: MusicBotClient):
         await client.change_presence(
             activity = discord.Game(song_details[0], details = song_details[1]),
             status = discord.Status.online)
-    
+        await music_client.loop.run_in_executor(None, song_logger.incr_music_counter, song.url, song.name)
+
+# Reset the status of the bot once it stops playing music
 async def on_disconnect(music_client: MusicBotClient):
     await music_bot._default_on_dc(music_client)
     
@@ -49,6 +53,12 @@ async def on_disconnect(music_client: MusicBotClient):
 
 music_bot.set_on_play(on_play)
 music_bot.set_on_disconnect(on_disconnect)
+
+# Added functionality for my (friends) server's music bot to save number of times a song is played
+async def send_music_counts(ctx: CmdContext):
+    data: list[tuple[str, int, str]] = await ctx.client.loop.run_in_executor(None, song_logger.get_music_counts, 20)
+    await ctx.message.channel.send('```'+'\n'.join([f"{name}: {count}" for _, name, count in data])+'```')
+bot["rewind"] = send_music_counts
 
 @client.event
 async def on_ready():
