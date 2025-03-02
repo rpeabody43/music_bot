@@ -84,8 +84,13 @@ async def on_message(message: discord.Message):
             await message.channel.send(cmd_result.err_msg())
         return
     
+    # Ignore messages sent by bots (including ourselves)
+    if message.author.bot: return
+    
     if client.user in message.mentions:
-        await message.channel.send(message.author)
+        await message.channel.send(f"<@{message.author.id}>")
+    elif len(message.mentions) > 0 and message.content.upper().endswith("WAKE UP"):
+        for _ in range(3): await message.channel.send(f"<@{message.mentions[0]}> wake up")
         
 @client.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
