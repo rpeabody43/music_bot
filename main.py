@@ -45,8 +45,8 @@ async def on_play(song: QueuedSong, music_client: MusicBotClient):
         await music_client.loop.run_in_executor(None, song_logger.incr_music_counter, song.url, song.name)
 
 # Reset the status of the bot once it stops playing music
-async def on_disconnect(music_client: MusicBotClient):
-    await music_bot._default_on_dc(music_client)
+async def on_disconnect(music_client: MusicBotClient, reason: str | None):
+    await music_bot._default_on_dc(music_client, reason)
     
     if music_client.guild.id==462469935436922880:
         await client.change_presence(status=discord.Status.idle)

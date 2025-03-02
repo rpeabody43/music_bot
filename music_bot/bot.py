@@ -8,13 +8,13 @@ class MusicBot:
     def __init__(self, bot: CmdRunner, *, 
                  on_play: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] | None = None,
                  on_queue: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] | None = None,
-                 on_dc: Callable[[MusicBotClient], Awaitable[None]] | None = None,
+                 on_dc: Callable[[MusicBotClient, str | None], Awaitable[None]] | None = None,
                  show_queue: Callable[[CmdContext, list[QueuedSong], int], Awaitable[None]] | None = None):
         self.clients: dict[int, MusicBotClient] = {}
         
         self._on_play: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] = on_play if on_play else self._default_on_play
         self._on_queue: Callable[[QueuedSong, MusicBotClient], Awaitable[None]] = on_queue if on_queue else self._default_on_queue
-        self._custom_on_dc: Callable[[MusicBotClient], Awaitable[None]] = on_dc if on_dc else self._default_on_dc
+        self._custom_on_dc: Callable[[MusicBotClient, str | None], Awaitable[None]] = on_dc if on_dc else self._default_on_dc
         self._show_queue: Callable[[CmdContext, list[QueuedSong], int], Awaitable[None]] = show_queue if show_queue else self._default_show_queue
         
         self._setup_commands(bot)
@@ -88,7 +88,7 @@ class MusicBot:
         if client==None:
             return CmdResult.err("Bot is not connected to a voice channel!")
         else: 
-            await client.disconnect(True)
+            await client.disconnect(reason = f"Disconnected by <@{ctx.message.author.id}>", force = True)
             return CmdResult.ok(None)
         
     async def move(self, ctx: CmdContext) -> CmdResult:
@@ -228,6 +228,25 @@ class MusicBot:
             return CmdResult.ok(None)
         else:
             return CmdResult.err("Could not remove song")
+        
+    async def clear(self, ctx: CmdContext) -> CmdResult:
+        """Clears the song queue
+
+        Args:
+            ctx (CmdContext): Context given to this command
+
+        Returns:
+            CmdResult: Result of running the clear command
+        """        
+        # Get the bot's voice client instance for this server
+        client: MusicBotClient | None = self.clients.get(ctx.guild.id)
+        
+        if client==None: return CmdResult.err("Bot is not connected to a voice channel!")
+        
+        # Clear the queue. This should(?) never error
+        client.clear_queue()
+        
+        return CmdResult.ok(None)
             
     def _setup_commands(self, bot: CmdRunner):
         """Setup all music bot related commands using discordbot.Bot, which will assign the given functions
@@ -256,8 +275,8 @@ class MusicBot:
         """
         self._on_queue: Callable[[QueuedSong, MusicBotClient]] = on_queue
         
-    def set_on_disconnect(self, on_dc: Callable[[discord.Client], Awaitable[None]]):
-        self._custom_on_dc: Callable[[discord.Client]] = on_dc
+    def set_on_disconnect(self, on_dc: Callable[[MusicBotClient, str | None], Awaitable[None]]):
+        self._custom_on_dc: Callable[[MusicBotClient, str | None], Awaitable[None]] = on_dc
         
     def set_show_queue(self, show_queue: Callable[[CmdContext, list[QueuedSong], int], Awaitable[None]]):
         self._show_queue = show_queue
@@ -272,17 +291,17 @@ class MusicBot:
         if client.is_active():
             await client.msg_channel.send(embed=discord.Embed(title = "Queued", description = f"{song.name} [{song.duration}]", url=song.url).set_thumbnail(url=song.thumbnail))
     
-    async def _on_dc(self, client: MusicBotClient):
+    async def _on_dc(self, client: MusicBotClient, reason: str | None = None):
         # This must run when the bot disconnects
         temp: MusicBotClient = self.clients.get(client.guild.id)
         if temp: self.clients.pop(client.guild.id)
         
         # User may define a custom function that runs when the bot disconnects from a voice channel. 
         # For example: a disconnect message. 
-        await self._custom_on_dc(client)
+        await self._custom_on_dc(client, reason)
         
-    async def _default_on_dc(self, client: MusicBotClient):
-        await client.msg_channel.send(embed=discord.Embed(title="Disconnected"))
+    async def _default_on_dc(self, client: MusicBotClient, reason: str | None = None):
+        await client.msg_channel.send(embed=discord.Embed(title="Disconnected", description=reason))
         
     async def _default_show_queue(self, ctx: CmdContext, queue: list[QueuedSong], curr_idx: int):
         if len(queue) > 0:

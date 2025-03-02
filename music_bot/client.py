@@ -182,13 +182,19 @@ class MusicBotClient(discord.VoiceClient):
         if self.next_in_queue > index and self.next_in_queue > 0: self.next_in_queue -= 1
         return res
     
+    def clear_queue(self):
+        """Clears the current queue of songs
+        """
+        self.queue.clear()
+        self.next_in_queue = 0
+    
     def curr_song(self) -> tuple[QueuedSong | None, int]:
         """Returns the current QueuedSong and the song's index in the queue
 
         Returns:
             tuple[QueuedSong | None, int]: Currently playing QueuedSong and its index in the queue
         """
-        return (self.queue[self.next_in_queue-1], self.next_in_queue - 1) if self.next_in_queue > 0 and self.next_in_queue - 1 < len(self.queue) else (None, -1)
+        return (self.queue[self.next_in_queue-1], self.next_in_queue - 1) if self._active else (None, -1)
     
     def play_next(self, error: Exception | None = None):
         """Plays the next song in the queue, stopping the currently playing song if necessary. 
@@ -227,9 +233,9 @@ class MusicBotClient(discord.VoiceClient):
     
     async def timeout(self):
         await asyncio.sleep(300)
-        await self.disconnect(False, False)
+        await self.disconnect(reason = "Timed out", force = False, cancel_timeout = False)
         
-    async def disconnect(self, force: bool = False, cancel_timeout: bool = True):
+    async def disconnect(self, *, force: bool = False, cancel_timeout: bool = True, reason: str | None = None):
         """Disconnects the bot from its voice channel
 
         Args:
@@ -237,16 +243,21 @@ class MusicBotClient(discord.VoiceClient):
         """
         self._disconnecting = True
         
+        self.stop()
+        await self._connection.disconnect(force=force, wait=True, cleanup = False)
+        self.cleanup(cancel_timeout = cancel_timeout, reason = reason)
+            
+    def cleanup(self, *, cancel_timeout: bool = True, reason: str | None = None):
+        super().cleanup()
+        
         if self._active:
             self.source.cleanup()
         elif cancel_timeout and self._timeout_task:
             self._timeout_task.cancel()
             
-        await super().disconnect(force = force)
         if hasattr(self, '_on_disconnect') and not self.is_connected(): 
-            self._run_task(self._on_disconnect(self))
+            self._run_task(self._on_disconnect(self, reason))
 
-        
     def get_queue(self) -> tuple[int, list[QueuedSong]]:
         """Get the queue and the current song index
 
@@ -303,7 +314,7 @@ class MusicBotClient(discord.VoiceClient):
         """
         self._on_err: Callable[[MusicBotClient, Exception], Awaitable[None]] = func
     
-    def set_on_disconnect(self, func: Callable[[MusicBotClient], Awaitable[None]]) -> None:
+    def set_on_disconnect(self, func: Callable[[MusicBotClient, str | None], Awaitable[None]]) -> None:
         """Set a function which gets called right after the bot disconnects from voice
         
         Note that it is possible that the bot fails to disconnect, but the disconnect function will get called anyways. 
@@ -311,7 +322,7 @@ class MusicBotClient(discord.VoiceClient):
         Args:
             func (Callable[[MusicBotClient], None]): Function that gets called when this MusicBotClient instance disconnects
         """
-        self._on_disconnect: Callable[[MusicBotClient], Awaitable[None]] = func
+        self._on_disconnect: Callable[[MusicBotClient, str | None], Awaitable[None]] = func
         
     def _run_task(self, coro: Coroutine[Any, Any, Any], *, name: str | None = None, context: Any | None = None):
         task: asyncio.Task = self.loop.create_task(coro, name=name, context=context)
