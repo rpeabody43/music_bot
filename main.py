@@ -90,7 +90,7 @@ async def on_message(message: discord.Message):
     if client.user in message.mentions:
         await message.channel.send(f"<@{message.author.id}>")
     elif len(message.mentions) > 0 and message.content.upper().endswith("WAKE UP"):
-        for _ in range(3): await message.channel.send(f"<@{message.mentions[0]}> wake up")
+        for _ in range(3): await message.channel.send(f"<@{message.mentions[0].id}> wake up")
         
 @client.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
