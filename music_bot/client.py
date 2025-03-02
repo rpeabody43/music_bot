@@ -105,7 +105,7 @@ class MusicBotClient(discord.VoiceClient):
         self.loop_queue: bool = False
         self._active: bool = False
         self._timeout_task: asyncio.Task | None = None
-        self._bg_tasks: set[asyncio.Task] = set()
+        self._bg_tasks: set[asyncio.Task | asyncio.Future] = set()
         self._queue_song_task: asyncio.Task[QueuedSong | Exception | None] | None = None
         
         self._disconnecting: bool = False
@@ -197,7 +197,7 @@ class MusicBotClient(discord.VoiceClient):
             error (Exception | None, optional): Argument passed by VoiceClient.play. Defaults to None.
         """
         if self._disconnecting: return
-        if error: self._run_task(self._on_err(self, error))
+        if error: self._run_task_threadsafe(self._on_err(self, error))
         
         # if we're playing a song already, then stop playing it and return
         # the 'after' closure we passed into self.play() should queue the next song for us
@@ -214,7 +214,7 @@ class MusicBotClient(discord.VoiceClient):
         
         super().play(discord.FFmpegOpusAudio(next_song.player, **FFMPEG_OPTIONS), after = self.play_next)
         self._set_active()
-        if hasattr(self, '_on_play'): self._run_task(self._on_play(next_song, self))
+        if hasattr(self, '_on_play'): self._run_task_threadsafe(self._on_play(next_song, self))
     
     def _set_active(self):
         self._active = True
@@ -317,5 +317,10 @@ class MusicBotClient(discord.VoiceClient):
         task: asyncio.Task = self.loop.create_task(coro, name=name, context=context)
         self._bg_tasks.add(task)
         task.add_done_callback(self._bg_tasks.discard)
+        
+    def _run_task_threadsafe(self, coro: Coroutine[Any, Any, Any]):
+        future: asyncio.Future = asyncio.run_coroutine_threadsafe(coro, self.loop)
+        self._bg_tasks.add(future)
+        future.add_done_callback(self._bg_tasks.discard)
         
         
