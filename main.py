@@ -92,10 +92,10 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     # Disconnect the bot if it gets moved to the afk channel
     if member==client.user:
         if after.channel==member.guild.afk_channel:
-            await music_bot.disconnect(CmdContext(client, after.channel, None))
+            await music_bot[member.guild].disconnect(reason="Moved to afk channel")
     
     # Disconnect the bot if the vc it's in is empty
     elif after.channel==None and before.channel!=None and len(before.channel.members)==1 and client.user in before.channel.members:
-        await music_bot.disconnect(CmdContext(client, before.channel, None))
+        await music_bot[member.guild].disconnect(reason="Voice channel is empty")
             
 client.run(os.getenv("BOT_TOKEN"))
