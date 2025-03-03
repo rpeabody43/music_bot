@@ -263,6 +263,7 @@ class MusicBot:
         bot[['queue', 'q']] = self.show_queue
         bot[['remove', 'rm']] = self.remove
         bot['loop'] = self.loop
+        bot['clear'] = self.clear
     
     def set_on_play(self, on_play: Callable[[QueuedSong, MusicBotClient], Awaitable[None]]):
         self._on_play: Callable[[QueuedSong, MusicBotClient]] = on_play
