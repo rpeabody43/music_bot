@@ -175,7 +175,7 @@ class MusicBotClient(discord.VoiceClient):
             QueuedSong | Exception: The song that got removed; if pop() fails then returns an exception
         """
         if index < 0 or index >= len(self.queue): return Exception("Index out of bounds")
-        elif isinstance(index, SupportsIndex): return Exception("Index for removing song must be a number")
+        elif not isinstance(index, SupportsIndex): return Exception("Index for removing song must be a number")
         
         res: QueuedSong = self.queue.pop(index)
         # Change next_in_queue only if self.queue.pop does not raise an error
