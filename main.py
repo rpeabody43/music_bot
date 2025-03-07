@@ -44,9 +44,9 @@ async def on_play(song: QueuedSong, music_client: MusicBotClient):
             activity = discord.Activity(
                 type = discord.ActivityType.playing, 
                 name = song_details[0], 
-                state = song_details[1],
+                state = song_details[1]
                 # emoji = discord.PartialEmoji(name = '🎶'),
-                timestamps = {'start': int(time.time() * 1000)}
+                # timestamps = {'start': int(time.time() * 1000)}
                 ),
             status = discord.Status.online)
         await music_client.loop.run_in_executor(None, song_logger.incr_music_counter, song.url, song.name)

@@ -1,4 +1,5 @@
 import discord
+import time
 from typing import Callable, Awaitable
 from cmd_manager import CmdRunner, CmdContext, CmdResult
 from .client import MusicBotClient, QueuedSong
@@ -286,11 +287,13 @@ class MusicBot:
     
     # Callbacks
     async def _default_on_play(self, song: QueuedSong, client: MusicBotClient):
-        await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = f"{song.name} [{song.duration}]", url=song.url).set_thumbnail(url=song.thumbnail))
+        await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = f"{song.name} [{song.duration}] <t:{int(time.time())}:R>", url=song.url)
+                                      .set_thumbnail(url = song.thumbnail))
         
     async def _default_on_queue(self, song: QueuedSong, client: MusicBotClient):
         if client.is_active():
-            await client.msg_channel.send(embed=discord.Embed(title = "Queued", description = f"{song.name} [{song.duration}]", url=song.url).set_thumbnail(url=song.thumbnail))
+            await client.msg_channel.send(embed=discord.Embed(title = "Queued", description = f"{song.name} [{song.duration}]", url=song.url)
+                                          .set_thumbnail(url = song.thumbnail))
     
     async def _on_dc(self, client: MusicBotClient, reason: str | None = None):
         # This must run when the bot disconnects
