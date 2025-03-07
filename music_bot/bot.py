@@ -287,7 +287,7 @@ class MusicBot:
     
     # Callbacks
     async def _default_on_play(self, song: QueuedSong, client: MusicBotClient):
-        await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = f"{song.name} [{song.duration}] <t:{int(time.time())}:R>", url=song.url)
+        await client.msg_channel.send(embed=discord.Embed(title = "Now Playing", description = f"{song.name} [{song.duration}]\n<t:{int(time.time())}:R>", url=song.url)
                                       .set_thumbnail(url = song.thumbnail))
         
     async def _default_on_queue(self, song: QueuedSong, client: MusicBotClient):
