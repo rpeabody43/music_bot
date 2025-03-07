@@ -227,7 +227,7 @@ class MusicBot:
             await ctx.message.channel.send(f"Removed `{song.name}` from queue")
             return CmdResult.ok(None)
         else:
-            return CmdResult.err("Could not remove song")
+            return CmdResult.err(f"Could not remove song:\n`{str(song)}`")
         
     async def clear(self, ctx: CmdContext) -> CmdResult:
         """Clears the song queue
