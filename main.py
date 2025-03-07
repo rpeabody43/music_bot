@@ -9,6 +9,7 @@ Created on Sun Sep 19 17:22:34 2021
 @author: irawi
 """ 
 import discord
+import time
 import asyncio
 import os
 
@@ -30,7 +31,7 @@ def split_any(string: str, delims: list[str], start: int = 0) -> tuple[str, str]
     """
     for i in range(start, len(string)):
         if string[i] in delims:
-            return string[:i], string[i:]
+            return string[:i], string[i+1:]
     return (string)
 
 # Added functionality for my (friends) server's music bot to show currently playing song as the bot's status
@@ -38,9 +39,15 @@ async def on_play(song: QueuedSong, music_client: MusicBotClient):
     await music_bot._default_on_play(song, music_client)
     
     if type(music_client.msg_channel)==discord.TextChannel and music_client.guild.id==462469935436922880:
-        song_details = split_any(song.name, [':', '-', '|', '.', '(', '/', '\\', ';'], 4)
+        song_details = split_any(song.name, [':', '-', '–', '—', '‒', '﹘', '|', '.', '(', '/', '\\', ';'], 3)
         await client.change_presence(
-            activity = discord.Game(song_details[0], details = song_details[1]),
+            activity = discord.Activity(
+                type = discord.ActivityType.playing, 
+                name = song_details[0], 
+                state = song_details[1],
+                # emoji = discord.PartialEmoji(name = '🎶'),
+                timestamps = {'start': int(time.time() * 1000)}
+                ),
             status = discord.Status.online)
         await music_client.loop.run_in_executor(None, song_logger.incr_music_counter, song.url, song.name)
 
