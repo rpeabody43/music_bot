@@ -4,6 +4,7 @@ from typing import Callable, Awaitable
 from cmd_manager import CmdRunner, CmdContext, CmdResult
 from .client import MusicBotClient, QueuedSong
 
+import traceback
 
 class MusicBot:
     def __init__(self, bot: CmdRunner, *, 
@@ -58,8 +59,8 @@ class MusicBot:
                 
                 # Print errors and send them to the discord channel as well
                 async def log_err(client: MusicBotClient, e: Exception):
-                    print(e, e.__traceback__.tb_frame, e.__traceback__.tb_lineno)
-                    await client.msg_channel.send(str(e))
+                    print('```'+''.join(traceback.extract_tb(e.__traceback__).format())+'```')
+                    await client.msg_channel.send('```'+''.join(traceback.extract_tb(e.__traceback__).format())+'```')
                     
                 client.set_on_err(log_err)
                 
