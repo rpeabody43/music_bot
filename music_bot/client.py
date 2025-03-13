@@ -229,9 +229,9 @@ class MusicBotClient(discord.VoiceClient):
     def _set_inactive(self):
         self._active = False
         if self._timeout_task and not self._timeout_task.done(): self._timeout_task.cancel()
-        self._timeout_task = self.loop.create_task(self.timeout())
+        self._timeout_task = self.loop.create_task(self.inactivity_timeout())
     
-    async def timeout(self):
+    async def inactivity_timeout(self):
         await asyncio.sleep(300)
         await self.disconnect(reason = "Timed out", force = False, cancel_timeout = False)
         
