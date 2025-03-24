@@ -145,8 +145,13 @@ class MusicBot:
             if not client.is_active():
                 client.play_next()
             return CmdResult.ok(None)
-        else:         
-            return CmdResult.err("Could not queue song"+f"\n{song}" if song else "")
+        elif song:
+            return CmdResult.err(f"Could not queue song\n`{song}`")
+        else:
+            if not client.is_connected():
+                return CmdResult.err()
+            else:
+                return CmdResult.err("Could not queue some\n`TypeError: 'NoneType' is not a valid song`")
 
             
     async def skip(self, ctx: CmdContext) -> CmdResult:

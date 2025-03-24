@@ -14,7 +14,7 @@ class CmdResult:
     def ok(val: Any) -> CmdResult:
         return CmdResult(True, val)
     
-    def err(err_msg: Exception | str) -> CmdResult:
+    def err(err_msg: Exception | str | None = None) -> CmdResult:
         return CmdResult(False, err_msg)
     
     def is_ok(self) -> bool:
@@ -27,7 +27,12 @@ class CmdResult:
         return self.__val if self.success else Exception("Attempted to unwrap an Err Result")
     
     def err_msg(self) -> str | None:
-        return None if self.success else ('```'+''.join(traceback.extract_tb(self.__val.__traceback__).format())+'```') if isinstance(self.__val, BaseException) else self.__val
+        """Returns an error message if this CmdResult represents an error, and that error is not None
+
+        Returns:
+            str | None: The error message as a string or None if not valid
+        """
+        return None if self.success or not self.__val else ('```'+''.join(traceback.extract_tb(self.__val.__traceback__).format())+'```') if isinstance(self.__val, BaseException) else str(self.__val)
     
     def __str__(self) -> str:
         return f"CmdResult::{"Ok" if self.success else "Err"}({str(self.__val)})"

@@ -9,8 +9,6 @@ Created on Sun Sep 19 17:22:34 2021
 @author: irawi
 """ 
 import discord
-import time
-import asyncio
 import os
 
 from cmd_manager import setup_runner, CmdRunner, CmdContext, CmdResult
@@ -72,13 +70,6 @@ async def on_ready():
     # global prev_plant
     print('We have logged in as {0.user}'.format(client))
     await client.change_presence(activity=discord.Game("RIP groovy and rythmn :sob:"))
-    
-    # try:
-    #     prev_plant = await load_time()
-    #     print("loaded plant time as: "+str(prev_plant))
-    # except:
-    #     print("could not load plant")
-    #     prev_plant=0
         
 @client.event
 async def on_message(message: discord.Message):
@@ -87,7 +78,7 @@ async def on_message(message: discord.Message):
     
     # Check the result and send an error message if the command failed
     if cmd_result:
-        if cmd_result.is_err() and len(cmd_result.err_msg()) > 0:
+        if cmd_result.is_err() and cmd_result.err_msg() and len(cmd_result.err_msg()) > 0:
             await message.channel.send(cmd_result.err_msg())
         return
     
