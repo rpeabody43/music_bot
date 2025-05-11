@@ -32,7 +32,7 @@ class CmdResult:
         Returns:
             str | None: The error message as a string or None if not valid
         """
-        return None if self.success or not self.__val else ('```'+''.join(traceback.extract_tb(self.__val.__traceback__).format())+'```') if isinstance(self.__val, BaseException) else str(self.__val)
+        return None if self.success or not self.__val else ('```'+f'{self.__val}\n'+''.join(traceback.extract_tb(self.__val.__traceback__).format())+'```') if isinstance(self.__val, BaseException) else str(self.__val)
     
     def __str__(self) -> str:
         return f"CmdResult::{"Ok" if self.success else "Err"}({str(self.__val)})"

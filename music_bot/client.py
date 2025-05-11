@@ -1,17 +1,20 @@
 import discord
 import asyncio
+from urllib import request
+import json
 from typing import Callable, Awaitable, Coroutine, SupportsIndex, Any
 import yt_dlp
 
 type QueuedSong = QueuedSong
+type QueuedPlaylist = tuple[str, list[QueuedSong]]
 type MusicBotClient = MusicBotClient
 
-# HEADER = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
-#        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-#        'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
-#        'Accept-Encoding': 'none',
-#        'Accept-Language': 'en-US,en;q=0.8',
-#        'Connection': 'keep-alive'}
+HEADER = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+       'Accept-Charset': 'ISO-8859-1,utf-8;q=0.7,*;q=0.3',
+       'Accept-Encoding': 'none',
+       'Accept-Language': 'en-US,en;q=0.8',
+       'Connection': 'keep-alive'}
 
 YTDL_FORMAT_OPTIONS = {
     'format': 'bestaudio',
@@ -34,7 +37,7 @@ YTDL_FORMAT_OPTIONS = {
     "forceurl": True,
 }
 
-FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn -filter:a "volume=0.25"'}
+FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -http_persistent 0','options': '-vn -filter:a "volume=0.25"'}
 
 YTDL = yt_dlp.YoutubeDL(YTDL_FORMAT_OPTIONS)
 
@@ -44,12 +47,13 @@ class QueuedSong:
     
     Additionally, has functions for searching for videos using youtube's search bar.
     """
-    def __init__(self, url: str | None, name: str, dur: str, thumbnail: str, player: str):
+    def __init__(self, url: str | None, name: str, dur: str, thumbnail: str, player: str | None = None):
         self.name: str = name
         self.url: str | None = url
         self.duration: str = dur
         self.thumbnail: str = thumbnail
         self.player: str | None = player
+        self.generating_player: bool = False
     
     async def create(query: str) -> QueuedSong | Exception | None:
         """Creates a QueuedSong, searching for video data if necessary. 
@@ -71,6 +75,9 @@ class QueuedSong:
         player: str | None = data.get('url')
         
         return QueuedSong(url, name, duration, thumbnail, player)
+    
+    def has_player(self) -> bool:
+        return self.player != None
     
     def get_video_info(query: str) -> dict[str, Any] | Exception | None:
         try:
@@ -97,22 +104,103 @@ class QueuedSong:
             data = data['entries'][0]
             
         return data
+    
+    async def add_player(self) -> bool:
+        self.generating_player = True
+        data: dict[str, Any] | Exception | None = await QueuedSong.get_video(self.url)
+        self.player = data.get('url')
+        return True if self.player else False
+    
+    async def get_playlist(playlist_url: str) -> QueuedPlaylist | Exception | None:
+        """Get a list of QueuedSong from a playlist
+        
+        Note that the queued songs will not come with video players
+
+        Args:
+            playlist_url (str): _description_
+
+        Returns:
+            QueuedPlaylist | Exception | None: _description_
+        """
+        if not "www.youtube.com/playlist?list=" in playlist_url: return None
+        try:
+            results: QueuedPlaylist = await asyncio.get_event_loop().run_in_executor(None, lambda: QueuedSong._playlist_query_result(playlist_url))
+            return results
+        except Exception as e:
+            return e
+    
+    def _find_closing_brace(string: str, open_brace: str, close_brace: str) -> int:
+        """Given open and closing brace characters to search for, finds the index of the respective closing brace
+
+        Args:
+            string (str): string to search in
+            open_brace (str): open brace character to match
+            close_brace (str): close brace character to match
+
+        Returns:
+            int: index of the closing brace matching to the first found open brace. 
+        """
+        start: int = string.index(open_brace)+1
+        counter: int = 1
+        for i,c in enumerate(string[start:]):
+            if c==open_brace:
+                counter+=1
+            elif c==close_brace:
+                counter-=1
+            if counter==0:
+                return start+i
+        return len(string)
+    
+    def _playlist_query_result(url: str) -> QueuedPlaylist:
+        """Searches for videos using a given youtube playlist URL
+
+        Args:
+            url (str): URL to search videos for
+
+        Returns:
+            dict[str, dict[str, dict]]: Dictionary containing some of the video's information. 
+        """
+        req: request.Request = request.Request(url, headers=HEADER)
+        page: str = request.urlopen(req).read().decode("utf-8")
+        
+        playlist_info_start: int = page.index("\"pageHeaderRenderer\"")
+        playlist_info_end: int = QueuedSong._find_closing_brace(page[playlist_info_start:], "{", "}")
+        playlist_info: dict[str, str | dict] = json.loads(page[playlist_info_start+21:playlist_info_start+playlist_info_end+1])
+        playlist_title: str = playlist_info.get('pageTitle', "Playlist")
+        
+        start: int = page.index("\"contents\":[{\"playlistVideoRenderer\":{\"")
+        end: int = start + QueuedSong._find_closing_brace(page[start:], "[", "]")
+        
+        video_info: list[dict[str, Any]] = [video['playlistVideoRenderer'] for video in json.loads(page[start+11:end+1])]
+        return playlist_title, [QueuedSong(f"https://www.youtube.com/watch?v={info['videoId']}", 
+                    info['title']['runs'][0]['text'], 
+                    info['lengthText']['simpleText'], 
+                    info['thumbnail']['thumbnails'][0]['url']) 
+                for info in video_info]
+            
+    
 
 class MusicBotClient(discord.VoiceClient):
     def __init__(self, client: discord.Client, channel: discord.abc.Connectable):
         # song queue
         self.queue: list[QueuedSong] = []
         self.next_in_queue: int = 0
-        # Event that checks whether a song is currently being queried or not
-        self.wait_query_event: asyncio.Event = asyncio.Event()
-        self.wait_query_event.set()
         
         self.loop_queue: bool = False
         self._active: bool = False
         self._timeout_task: asyncio.Task | None = None
         self._bg_tasks: set[asyncio.Task | asyncio.Future] = set()
+        
+        # Event that checks whether a song is currently being queried or not
+        self._wait_query_event: asyncio.Event = asyncio.Event()
+        self._wait_query_event.set()
+        
         # Used to force only one song to be queried at a time
         self._query_task: asyncio.Task[QueuedSong | Exception | None] | None = None
+        
+        # Provides provide priority to a certain query
+        self._priority_query_event: asyncio.Event = asyncio.Event()
+        self._priority_query_event.set()
         
         self._disconnecting: bool = False
         
@@ -126,7 +214,7 @@ class MusicBotClient(discord.VoiceClient):
         self._set_inactive()
     
     async def enqueue(self, query: str | QueuedSong, blocking: bool = True) -> QueuedSong | Exception | None:
-        """Adds a song to the queue
+        """Adds a song(s) to the queue
 
         Args:
             query (str | QueuedSong): A query or QueuedSong
@@ -142,12 +230,7 @@ class MusicBotClient(discord.VoiceClient):
             return None
             
         # Create an event that will be set once this enqueue request completes
-        my_event: asyncio.Event = asyncio.Event()
-
-        # Wait for previous query to run
-        last_event: asyncio.Event = self.wait_query_event
-        self.wait_query_event = my_event
-        await last_event.wait()
+        my_event: asyncio.Event = await self._wait_query()
         
         # If after waiting for previous queries we got disconnected, cancel the enqueue and bubble the wait events
         if self._disconnecting:
@@ -155,9 +238,9 @@ class MusicBotClient(discord.VoiceClient):
             return None
         
         # Search using the query and queue the song
-        song: QueuedSong | Exception | None
+        song: QueuedSong | QueuedPlaylist | Exception | None
         if type(query)==str:
-            self._query_task = self.loop.create_task(QueuedSong.create(query))
+            self._query_task = self.loop.create_task(QueuedSong.create(query) if not "www.youtube.com/playlist?list=" in query else QueuedSong.get_playlist(query))
             try:
                 song = await self._query_task
             except asyncio.CancelledError:
@@ -172,7 +255,13 @@ class MusicBotClient(discord.VoiceClient):
             return None
         
         # Add the song if it was found
-        if song and type(song)==QueuedSong: self.queue.append(song)
+        if song and type(song)==tuple:
+            if len(song[1]) > 0:
+                self.queue.extend(song[1])
+                song = QueuedSong(query, song[0], '??:??', song[1][0].thumbnail)
+            else:
+                song = Exception("Invalid Playlist")
+        elif song and type(song)==QueuedSong: self.queue.append(song)
         
         # Limit queue size to 32
         if len(self.queue) > 32: 
@@ -184,7 +273,29 @@ class MusicBotClient(discord.VoiceClient):
         if hasattr(self, '_on_queue') and type(song)==QueuedSong: self._run_task(self._on_queue(song, self))
             
         return song        
-        
+    
+    async def _wait_query(self, prioritize: bool = False) -> asyncio.Event:
+        """Block until the previously queried song gets queued, 
+        and sets up the query event bubble so that the next queried song waits
+
+        Returns:
+            asyncio.Event: handle for setting when our current query completes
+        """
+        if prioritize and not self._priority_query_event.is_set():                 
+            self._priority_query_event.clear()
+            await self._query_task
+            return self._priority_query_event
+
+        # Create an event that will be set once our current query completes
+        my_event: asyncio.Event = asyncio.Event()
+
+        # Wait for previous query to run
+        last_event: asyncio.Event = self._wait_query_event
+        self._wait_query_event = my_event
+        await last_event.wait()
+        await self._priority_query_event.wait()
+        return my_event
+    
     def cancel_enqueue(self):
         """Stop the last queried song from being queued if it hasn't been queued yet
         """
@@ -253,14 +364,65 @@ class MusicBotClient(discord.VoiceClient):
         
         # get the next song in the queue
         next_song: QueuedSong | None = self.incr_queue()
+        
+        # then play it
+        self._play_song(next_song)
+        
+    def _play_song(self, song: QueuedSong, check_player: bool = True):
         # if we're at the end of the queue, return because there is nothing to play.
-        if next_song==None:
+        if song==None:
             self._set_inactive()
             return
+        # Otherwise, if the next song doesn't have a player, create one then play. 
+        elif check_player and not song.has_player():
+            self._run_task_threadsafe(self._add_player_and_play(song))
+            return
         
-        super().play(discord.FFmpegOpusAudio(next_song.player, **FFMPEG_OPTIONS), after = self.play_next)
+        # play the song
+        super().play(discord.FFmpegOpusAudio(song.player, **FFMPEG_OPTIONS), after = self.play_next)
         self._set_active()
-        if hasattr(self, '_on_play'): self._run_task_threadsafe(self._on_play(next_song, self))
+        if hasattr(self, '_on_play'): self._run_task_threadsafe(self._on_play(song, self))
+        
+        # setup the next song if it has no player
+        after_song: QueuedSong | None = self.peek_queue()
+        if after_song and not after_song.has_player(): self._run_task_threadsafe(self._add_player_to_song(after_song))
+    
+    async def _add_player_to_song(self, song: QueuedSong, prioritize: bool = False) -> bool:        
+        my_event: asyncio.Event = await self._wait_query(prioritize)
+        if self._disconnecting:
+            my_event.set()
+            return False
+        self._query_task = self.loop.create_task(song.add_player())
+        res: bool = True
+        try:
+            await self._query_task
+        except asyncio.CancelledError: res = False
+        except Exception as e: res = False
+        if self._disconnecting: res = False
+        
+        my_event.set()
+        return res and song.has_player()
+    
+    async def _add_player_and_play(self, song: QueuedSong):
+        if song.has_player():
+            self._play_song(song, False)
+        
+        elif song.generating_player:            
+            iters: int = 0
+            while not song.has_player() and iters<10:
+                await asyncio.sleep(1)
+                iters+=1
+                
+            if song.has_player():
+                self._play_song(song, False)
+            else:
+                self.play_next(Exception(f"Failed to play {song.name}"))
+                
+        elif await self._add_player_to_song(song, True):
+            self._play_song(song, False)
+            
+        else:
+            self.play_next(Exception(f"Failed to play {song.name}"))
     
     def _set_active(self):
         self._active = True

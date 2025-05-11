@@ -45,12 +45,17 @@ class QueuedSong:
                 use_query = False
         
         if use_query:
-            data: dict[str, dict[str, dict]] = QueuedSong.first_query_result(f"https://www.youtube.com/results?search_query={QueuedSong.parse_url_query(query)}")
+            data: dict[str, dict[str, dict]] = QueuedSong.first_query_result(f"https://www.youtube.com/results?search_query={QueuedSong._parse_url_query(query)}")
             name, url, duration, thumbnail = data['title']['runs'][0]['text'], f"https://www.youtube.com/watch?v={data['videoId']}", data['lengthText']['simpleText'], data['thumbnail']['thumbnails'][0]['url']
         
         return QueuedSong(url, name, duration, thumbnail)
+    
+    async def get_playlist(playlist_url: str) -> list[QueuedSong] | None:
+        if not "www.youtube.com/playlist?list=" in playlist_url: return None
         
-    def parse_url_query(query: str) -> str:
+        results: list[dict[str, dict[str, dict]]] = await asyncio.get_event_loop().run_in_executor(None, lambda: QueuedSong._playlist_query_result(playlist_url))
+    
+    def _parse_url_query(query: str) -> str:
         """Converts a query (as normal characters) to the format used by youtube search urls (alpha numeric characters or `%ascii hex` otherwise)
 
         Args:
@@ -61,7 +66,7 @@ class QueuedSong:
         """
         return ''.join([c if c.isalnum() else "+" if c==' ' else f"%{hex(ord(c))[2:].upper()}" for c in ' '.join(query.split())])
     
-    def find_closing_brace(string: str, open_brace: str, close_brace: str) -> int:
+    def _find_closing_brace(string: str, open_brace: str, close_brace: str) -> int:
         """Given open and closing brace characters to search for, finds the index of the respective closing brace
 
         Args:
@@ -83,8 +88,8 @@ class QueuedSong:
                 return start+i
         return len(string)
     
-    async def first_query_result(url: str) -> dict[str, dict[str, dict]]:
-        """Searches for a video using a given URL in the format youtube.com/results?search_query= ...
+    def _playlist_query_result(url: str) -> dict[str, dict[str, dict]]:
+        """Searches for a video using a given youtube playlist URL
 
         Args:
             url (str): URL to search videos for
@@ -93,10 +98,10 @@ class QueuedSong:
             dict[str, dict[str, dict]]: Dictionary containing some of the video's information. 
         """
         req: request.Request = request.Request(url, headers=HEADER)
-        page: str = await asyncio.get_running_loop().run_in_executor(None, lambda: request.urlopen(req).read(750000).decode("utf-8"))
+        page: str = request.urlopen(req).read().decode("utf-8")
         
-        start: int = page.index("\"contents\":[{\"videoRenderer\":{\"")
-        end: int = start + QueuedSong.find_closing_brace(page[start:], "{", "}")
+        start: int = page.index("\"contents\":[{\"playlistVideoRenderer\":{\"")
+        end: int = start + QueuedSong._find_closing_brace(page[start:], "[", "]")
         
-        video_info: dict[str, dict[str, dict]] = await asyncio.get_running_loop().run_in_executor(None, lambda: json.loads(page[start+12:end+1])['videoRenderer'])
+        video_info: dict[str, dict[str, dict]] = json.loads(page[start+11:end+1])
         return video_info
