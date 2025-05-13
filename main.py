@@ -101,5 +101,5 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     elif after.channel==None and before.channel!=None and len(before.channel.members)==1 and client.user in before.channel.members:
         await music_bot[member.guild].disconnect(reason="Voice channel is empty")
 
-# os.getenv("BOT_TOKEN")
-client.run(os.getenv("BOT_TOKEN"))
+# os.getenv('BOT_TOKEN')
+client.run(os.getenv('BOT_TOKEN'))
