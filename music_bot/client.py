@@ -29,15 +29,15 @@ YTDL_FORMAT_OPTIONS = {
     'quiet': True, # update
     'no_warnings': True,
     'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '140',
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'mp3',
+        'preferredquality': '140',
     }],
     "simulate": True,
     "forceurl": True,
 }
 
-FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-http_persistent 0 -vn -filter:a "volume=0.25"'}
+FFMPEG_OPTIONS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn -filter:a "volume=0.25"'}
 
 YTDL = yt_dlp.YoutubeDL(YTDL_FORMAT_OPTIONS)
 
