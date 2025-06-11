@@ -10,9 +10,11 @@ Created on Sun Sep 19 17:22:34 2021
 """ 
 import discord
 import os
+import sys
 
 from cmd_manager import setup_runner, CmdRunner, CmdContext, CmdResult
 from music_bot import MusicBot, MusicBotClient, QueuedSong
+from misc_cmds import add_misc_cmds
 import song_logger
 
 
@@ -22,6 +24,9 @@ client: discord.Client = discord.Client(intents=intents)
 bot: CmdRunner = setup_runner(client, on_success = lambda ctx: ctx.message.add_reaction("👍"), on_fail = lambda ctx: ctx.message.add_reaction("👎"))
 
 music_bot: MusicBot = MusicBot(bot)
+
+# Link miscellaneous commands
+add_misc_cmds(bot)
 
 def split_any(string: str, delims: list[str], start: int = 0) -> tuple[str, str]:
     """
@@ -101,5 +106,10 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     elif after.channel==None and before.channel!=None and len(before.channel.members)==1 and client.user in before.channel.members:
         await music_bot[member.guild].disconnect(reason="Voice channel is empty")
 
-# os.getenv('BOT_TOKEN')
-client.run(os.getenv('BOT_TOKEN'))
+# Log in with token passed from command line (for testing)
+if len(sys.argv) == 2:
+    client.run(sys.argv[1])
+# Otherwise use environment variable
+else:
+    # os.getenv('BOT_TOKEN')
+    client.run(os.getenv('BOT_TOKEN'))
